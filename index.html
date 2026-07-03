@@ -1,20 +1,85 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Redirecting...</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Upload App — redirecting…</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#0f172a; color:#e2e8f0;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+  .box { text-align:center; max-width: 420px; padding: 24px; }
+  a.btn { display:inline-block; margin-top:16px; padding:10px 20px; background:#3b82f6;
+          color:white; text-decoration:none; border-radius:8px; font-weight:600; }
+  .meta { margin-top:18px; font-size:12px; color:#64748b; }
+  .spinner { width:28px; height:28px; border:3px solid #334155; border-top-color:#3b82f6;
+             border-radius:50%; margin: 0 auto 14px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
-
-<h2>Redirecting...</h2>
+  <div class="box">
+    <div class="spinner"></div>
+    <div id="status">Finding the current link…</div>
+    <div id="linkArea"></div>
+    <div class="meta" id="meta"></div>
+  </div>
 
 <script>
-fetch("config.json?" + Date.now())
-.then(r => r.json())
-.then(data => {
-    window.location.replace(data.url);
-});
-</script>
+  // How often to re-check config.json while this tab stays open.
+  const POLL_MS = 15000;
+  let lastUrl = null;
 
+  async function fetchConfig() {
+    // Cache-busting is the whole fix here: GitHub Pages' CDN caches
+    // config.json for several minutes. A plain fetch('config.json')
+    // can silently return a stale copy even right after a push.
+    // Adding a changing query param + { cache: 'no-store' } forces a
+    // fresh network request every time.
+    const url = 'config.json?t=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('config.json fetch failed: ' + res.status);
+    return res.json();
+  }
+
+  function applyConfig(cfg) {
+    const statusEl = document.getElementById('status');
+    const linkArea = document.getElementById('linkArea');
+    const metaEl = document.getElementById('meta');
+
+    if (!cfg.url) {
+      statusEl.textContent = 'No live link published yet.';
+      return;
+    }
+
+    if (cfg.url !== lastUrl) {
+      lastUrl = cfg.url;
+      linkArea.innerHTML =
+        '<a class="btn" href="' + cfg.url + '">Open Photo Upload App</a>';
+      statusEl.textContent = 'Redirecting you now…';
+
+      // Auto-redirect on first load. If you'd rather always require a
+      // click (e.g. to avoid a stale auto-nav on a tab left open all
+      // day), remove the next line and keep just the button above.
+      window.location.href = cfg.url;
+    }
+
+    const updated = cfg.updated ? new Date(cfg.updated * 1000).toLocaleTimeString() : 'unknown';
+    metaEl.textContent = 'Link last updated: ' + updated + ' • checked ' + new Date().toLocaleTimeString();
+  }
+
+  async function tick() {
+    try {
+      const cfg = await fetchConfig();
+      applyConfig(cfg);
+    } catch (err) {
+      document.getElementById('status').textContent =
+        'Could not load the current link. Retrying…';
+      console.error(err);
+    }
+  }
+
+  tick();
+  setInterval(tick, POLL_MS);
+</script>
 </body>
 </html>
